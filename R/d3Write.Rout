@@ -1,0 +1,171 @@
+
+R version 3.4.0 Patched (2017-05-18 r72697) -- "You Stupid Darkness"
+Copyright (C) 2017 The R Foundation for Statistical Computing
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> options(encoding = "native.enc")
+> library(pscl)
+Loading required package: MASS
+Loading required package: lattice
+Classes and Methods for R developed in the
+
+Political Science Computational Laboratory
+
+Department of Political Science
+
+Stanford University
+
+Simon Jackman
+
+hurdle and zeroinfl functions by Achim Zeileis
+
+> load("../data/rc.rda")
+> load("../data/id1.rda")
+> load("../data/xbar.rda")
+> 
+> ## time stamp
+> write.csv(data.frame(date=as.character(file.info("../data/id1.rda")$mtime)),
++           row.names=FALSE,
++           quote=TRUE,
++           file="../data/timeStamp.csv")  
+> 
+> ## minimum number of votes for plotting
+> plotMin <- 30
+> if(id1$m<plotMin){
++   plotMin <- 1       ## for early in the Congress
++ }
+> 
+> ## number of non-unanimous votes
+> write.csv(data.frame(nvotes=id1$m),
++           row.names=FALSE,
++           file="../data/nvotes.csv")
+> 
+> legisNames <- rownames(rc$votes)
+> legisNames <- gsub(legisNames,
++                    pattern="<U\\+00E1>",
++                    replacement="\u00e1",
++                    useBytes = TRUE)
+> ## drop legislators with lots of missed votes from the plotting
+> bad <- apply(rc$votes,1,function(x)sum(!is.na(x))<plotMin)
+> badNames <- legisNames[bad]
+> 
+> rc0 <- dropRollCall(rc,dropList = list(lop=0,legisMin=5))
+> prefs <- data.frame(y=id1$xbar,
++                     legisNames=rownames(id1$xbar),
++                     party=rc0$legis.data$party,
++                     id=paste(rc0$legis.data$state,
++                              rc0$legis.data$cd,
++                              sep="-"),
++                     stringsAsFactors=FALSE)
+> 
+> load("../data/dat16.RData")
+> dat16$id <- paste(dat16$stpost,dat16$district,sep="-")
+> plotData <- merge(prefs,dat16,
++                   by="id",
++                   stringsAsFactors=FALSE)
+> 
+> ## accents etc
+> ## theOne <- grep("\\\303\\\241",plotData$legisNames)
+> ## plotData$legisNames <- gsub(plotData$legisNames,
+> ##                             pattern="\\\303\\\241",
+> ##                             replacement="\\\xE1")
+> ## Encoding(plotData$legisNames) <- "latin1"
+> 
+> rownames(plotData) <- plotData$legisNames
+> 
+> if("D1" %in% names(plotData)){
++   plotData$y <- plotData$D1
++   plotData$D1 <- NULL
++ }
+> 
+> if("dpvote" %in% names(plotData)){
++   plotData$x <- 100 - plotData$dpvote   ## Trump 2-party pres vote in district
++   plotData$obama <- NULL
++ }
+> 
+> ## clobber missing vote share
+> plotData <- plotData[!is.na(plotData$x),]
+> 
+> 
+> 
+> 
+> 
+> plotData$legisNames <- gsub(plotData$legisNames,
++                             pattern="<U\\+00E1>",
++                             replacement="\u00e1",
++                             useBytes = TRUE)
+> ll <- list()
+> ll[[1]] <- loess(y ~ x,
++                data=plotData,
++                subset=party=="R",
++                span=2/3)
+> ll[[2]] <- loess(y ~ x,
++                data=plotData,
++                subset=party=="D",
++                span=2/3)
+> 
+> yhat <- lapply(ll,
++                function(obj){
++                  xseq <- seq(from=min(obj$x),to=max(obj$x),length=101)
++                  yhat <- predict(obj,newdata=data.frame(x=xseq))
++                  return(data.frame(x=xseq,yhat=yhat))
++                })
+> 
+> write.csv(file="../data/repLoess.csv",
++           row.names=FALSE,
++           quote=TRUE,
++           yhat[[1]])
+> 
+> write.csv(file="../data/demLoess.csv",
++           row.names=FALSE,
++           quote=TRUE,
++           yhat[[2]])
+> 
+> write.csv(file="../data/plotData.csv",
++           row.names=FALSE,
++           quote=TRUE,
++           plotData)
+> 
+> ## out data
+> outData <- rc$legis.data
+> outData$name <- rownames(rc$legis.data)
+> m <- summary(rc,verbose=TRUE)$legisTab[,"missing"]
+by vote...and party loyalty scores
+> outData <- merge(x=outData,
++                  y=data.frame(missingVotes=m,name=names(m)))
+> outData <- merge(x=outData,
++                  y=data.frame(idealPoint=s$xm[,"D1"],
++                               lo=s$xHDR[,"lower","D1"],
++                               up=s$xHDR[,"upper","D1"],
++                               name=rownames(s$xm)))
+> outData$label <- outData$name
+> outData$name <- NULL
+> outData$indx <- rank(outData$idealPoint)
+> 
+> write.csv(outData[order(outData$indx),],
++           file="../data/estimates.csv",
++           na=" ",
++           quote=1:(dim(outData)[2]),  
++           row.names=FALSE,
++           fileEncoding="UTF-8")
+> 
+> 
+> proc.time()
+   user  system elapsed 
+  0.925   0.082   1.002 
